@@ -1,0 +1,21 @@
+# Visual Studio
+.vs/
+*.user
+*.suo
+*.userprefs
+*.usertasks
+*.sln.docstates
+
+# Build results
+[Bb]in/
+[Oo]bj/
+packages/
+*.nupkg
+
+# Debug
+*.pdb
+*.cache
+
+# OS generated files
+.DS_Store
+Thumbs.db
