@@ -1,12 +1,23 @@
 using Microsoft.Extensions.Caching.Distributed;
+using Microsoft.Extensions.Caching.Memory;
 using StackExchange.Redis;
 using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
+using RedisApi.Data;
+using RedisApi.Models;
+using RedLockNet.SERedis;
+using RedLockNet.SERedis.Configuration;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
+builder.Services.AddControllers(); // 添加控制器支持
+
+// 0. 注册 SQLite 数据库
+builder.Services.AddDbContext<AppDbContext>(options =>
+    options.UseSqlite("Data Source=app.db"));
 
 // 1. 注册 ConnectionMultiplexer (用于直接操作 Redis)
 // 建议作为 Singleton 注册
@@ -23,6 +34,20 @@ builder.Services.AddStackExchangeRedisCache(options =>
     options.InstanceName = "RedisApi_"; // Key 前缀
 });
 
+// 3. 注册 MemoryCache (L1 进程内缓存)
+builder.Services.AddMemoryCache();
+
+// 4. 注册 RedLockFactory (用于分布式锁)
+builder.Services.AddSingleton<RedLockNet.IDistributedLockFactory>(sp =>
+{
+    var multiplexer = sp.GetRequiredService<IConnectionMultiplexer>();
+    // RedLock 可以连接多个 Redis 实例以提高可靠性
+    return RedLockFactory.Create(new[] { new RedLockMultiplexer(multiplexer) });
+});
+
+// 5. 注册后台订阅服务
+builder.Services.AddHostedService<RedisApi.Services.SubscriberService>();
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
@@ -33,69 +58,13 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
-var summaries = new[]
+// 确保数据库创建并应用迁移 (仅用于演示，生产环境请使用迁移工具)
+using (var scope = app.Services.CreateScope())
 {
-    "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
-};
-
-// 演示 1: 使用 IDistributedCache 进行缓存
-app.MapGet("/weatherforecast", async (IDistributedCache cache) =>
-{
-    string cacheKey = "weather_forecast";
-    
-    // 尝试从缓存获取
-    string? cachedWeather = await cache.GetStringAsync(cacheKey);
-    
-    if (!string.IsNullOrEmpty(cachedWeather))
-    {
-        Console.WriteLine("Returning from cache");
-        return JsonSerializer.Deserialize<WeatherForecast[]>(cachedWeather);
-    }
-
-    // 模拟耗时操作
-    await Task.Delay(1000); 
-    Console.WriteLine("Fetching from source");
-
-    var forecast =  Enumerable.Range(1, 5).Select(index =>
-        new WeatherForecast
-        (
-            DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
-            Random.Shared.Next(-20, 55),
-            summaries[Random.Shared.Next(summaries.Length)]
-        ))
-        .ToArray();
-
-    // 存入缓存
-    var cacheOptions = new DistributedCacheEntryOptions
-    {
-        AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(10) // 10秒过期
-    };
-    
-    await cache.SetStringAsync(cacheKey, JsonSerializer.Serialize(forecast), cacheOptions);
-
-    return forecast;
-})
-.WithName("GetWeatherForecast");
-
-// 演示 2: 直接使用 IConnectionMultiplexer (更高级的操作)
-app.MapPost("/api/values", async (IConnectionMultiplexer redis, string key, string value) =>
-{
-    var db = redis.GetDatabase();
-    await db.StringSetAsync(key, value);
-    return Results.Ok($"Set {key} = {value}");
-});
-
-app.MapGet("/api/values/{key}", async (IConnectionMultiplexer redis, string key) =>
-{
-    var db = redis.GetDatabase();
-    string? value = await db.StringGetAsync(key);
-    return value is not null ? Results.Ok(value) : Results.NotFound();
-});
-
-app.Run();
-
-record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
-{
-    public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
+    var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    dbContext.Database.EnsureCreated();
 }
 
+app.MapControllers(); // 映射控制器
+
+app.Run();

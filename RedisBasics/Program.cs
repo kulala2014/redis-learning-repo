@@ -68,21 +68,21 @@ else
 }
 
 
-// SETEX Expiration (设置带过期时间的键值)
+// SETEX Expiration (设置带过期时间的键值):  SETEX key seconds value
 await db.StringSetAsync("temp_key", "I will disappear in 5 seconds", TimeSpan.FromSeconds(5));
 Console.WriteLine("Set temp_key with 5 seconds expiration");
 
 
-//SETRANGE
+//SETRANGE: Overwrite part of a string at key starting at the specified offset
 await db.StringSetRangeAsync(key, 6, " Redis");
 string? setRangeValue = await db.StringGetAsync(key);
 Console.WriteLine($"After SetRange, {key} = {setRangeValue}");
 
-//STRLEN
+//STRLEN: Get the length of the string value stored at key
 long strLen = await db.StringLengthAsync(key);
 Console.WriteLine($"Length of {key} = {strLen}");
 
-//MSET
+//MSET: 同时设置多个键值对
 await db.StringSetAsync(new KeyValuePair<RedisKey, RedisValue>[] {
     new KeyValuePair<RedisKey, RedisValue>("key1", "value1"),
     new KeyValuePair<RedisKey, RedisValue>("key2", "value2"),
@@ -91,8 +91,8 @@ await db.StringSetAsync(new KeyValuePair<RedisKey, RedisValue>[] {
 var msetValues = await db.StringGetAsync(new RedisKey[] {"key1","key2", "key3" });
 Console.WriteLine("MSET key1, key2, key3", string.Join(',', msetValues));
 
-//MSETNX
- 
+//MSETNX: 同时设置多个键值对，只有当所有键都不存在时才成功
+
 bool msetnxResult = await db.StringSetAsync(new KeyValuePair<RedisKey, RedisValue>[] {
     new KeyValuePair<RedisKey, RedisValue>("key3", "value3"),
     new KeyValuePair<RedisKey, RedisValue>("key5", "value5"),
@@ -100,7 +100,7 @@ bool msetnxResult = await db.StringSetAsync(new KeyValuePair<RedisKey, RedisValu
 
 Console.WriteLine($"MSETNX result: {msetnxResult} (Should be False because key3 exists)");
 
-//PSETEX:PSETEX key milliseconds value
+//PSETEX:PSETEX key milliseconds value: 设置带过期时间的键值，过期时间单位为毫秒
 await db.StringSetAsync("psetex_key", "I expire in 1500 ms", TimeSpan.FromMilliseconds(1500));
 Console.WriteLine("Set psetex_key with 1500 ms expiration");
 
