@@ -75,3 +75,7 @@ EXEC sp_GetMessages @Status = 1, @City = 'New York'
 
 *   **优点**: 高度封装，性能优异（手动映射避免了反射开销），实体逻辑内聚。
 *   **设计哲学**: 数据库逻辑（存储过程）与 C# 逻辑（Contract）强绑定，通过 `Criteria` 提供灵活的参数传递接口。
+  
+ ## 5. NEXTEP.DATABASE.Lib
+### 5.1 ContractRepository.cs 
+ 
